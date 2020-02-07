@@ -21,6 +21,7 @@ from __future__ import print_function
 import abc
 import collections
 import numpy as np
+from tensorflow.python.client import timeline
 
 import tensorflow as tf
 
@@ -324,7 +325,7 @@ class BaseModel(object):
         self.grad_norm_summary)
     return train_summary
 
-  def train(self, sess):
+  def train(self, sess, options = None, run_metadata = None, eppoch = None):
     """Execute train graph."""
     assert self.mode == tf.contrib.learn.ModeKeys.TRAIN
     output_tuple = TrainOutputTuple(train_summary=self.train_summary,
@@ -335,7 +336,13 @@ class BaseModel(object):
                                     batch_size=self.batch_size,
                                     grad_norm=self.grad_norm,
                                     learning_rate=self.learning_rate)
-    return sess.run([self.update, output_tuple])
+    
+    ret_val = sess.run([self.update, output_tuple])
+    if eppoch % 7 == 0:
+        ret_val = sess.run([self.update, output_tuple], run_metadata=run_metadata, options=options)
+        profile(run_metadata, eppoch)
+
+    return ret_val
 
   def eval(self, sess):
     """Execute eval graph."""
@@ -717,6 +724,12 @@ class BaseModel(object):
 
     return stack_state_list
 
+def profile(run_metadata, epoch=0):
+    with open('profs/timeline_step' + str(epoch) + '.json', 'w') as f:
+        # Create the Timeline object, and write it to a json file
+        fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+        chrome_trace = fetched_timeline.generate_chrome_trace_format()
+        f.write(chrome_trace)
 
 class Model(BaseModel):
   """Sequence-to-sequence dynamic model.
